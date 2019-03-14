@@ -4,12 +4,14 @@
 """
 #Import modules
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt; plt.rcdefaults()
-from os import getcwd
 import re
+from os import getcwd
 from nltk.corpus import stopwords
 from textblob import TextBlob, Word
 from translate import Translator
+
 
 
 #Configure pandas option to display all columns included within the dataframe
@@ -18,8 +20,7 @@ pd.set_option('display.max_columns',19)
 class TweetDataHandler:
     """
     Class used for data extraction and pre-processing, imported in other modules for analysis and visualization
-    of the tweet data. Will contain future methods for scraping twitter data as well as a means of leveraging
-    mutliple data sources for tweet analysis.
+    of the tweet data.
     """
 
     def __init__(self):
@@ -35,13 +36,12 @@ class TweetDataHandler:
         processed data from a file directory.
 
         TO DO: 1) Create timer decorator used for performance testing of different program features. The timer decorator funtion will include
-        a condition that checks the configuration at runtime. 2) De-bug issue related to importing single file when 0 is specified in the number
-        of columns index of the "troll_tweets" list at position data_sources["troll_tweets"][0][2]. 3) Convert dictionary to separate json file that is loaded
+        a condition that checks the configuration at runtime. 2) Convert dictionary to separate json file that is loaded
         to the program, so multiple json files can be created for easier variability of program configuration.
         """
         self.data_sources = {
             "troll_tweets" : [
-                    ["\\data\\IRAhandle_tweets_",".csv",2],
+                    ["\\data\\IRAhandle_tweets_",".csv",9],
                     ['external_author_id',
                      'author',
                      'content',
@@ -58,23 +58,28 @@ class TweetDataHandler:
                      'retweet',
                      'account_category']]
             }
+        
+        self.cat_list = ['Fearmonger','Commercial', 'HashtagGamer','LeftTroll', 'NewsFeed', 'RightTroll']
+        
         self.config = {
-            "isImport":True,
             "isMsg": True,
-            "isTimed":True,
-            "isPreProc":True,
+            "isTimed":False,
+            "isPreProc":False,
+            "isSavePreproc": False,
             "msg_import":'status : reading file into temp data frame',
-            "msg_append":'status : reading file into temp data frame',
+            "msg_import_preproc":'status : reading preprocessed file into dataframe',
+            "msg_append":'status : appending temp data to data frame',
             "msg_summary": 'status : summarizing data',
             "msg_calculations":'status : performing calculations',
-            "msg_preproc_trans":'status : translating tweets',
             "msg_preproc_lower":'status : making tweets lower case',
             "msg_preproc_punct":'status : removing tweet punctuation',
             "msg_preproc_tags":'status : removing hashtags from tweets',
             "msg_preproc_stop":'status : removing stopwords from tweets',
-            "msg_preproc_spell":'status : correcting tweet spelling',
             "msg_preproc_lemma":'status : performing tweet lemmatization',
+            "msg_preproc_splitcols":'status : splitting dataframe column',
+            "msg_preproc_save":'status : saving processed tweets',
             "msg_hash_links":'status : removing hyperlinks from tweets',
+            "msg_preproc_sentiment":'status : calculating tweet sentiment',
             "msg_hash_tag":'status : retrieving and storing tweet hash tags for analysis',
             }
 
@@ -101,32 +106,33 @@ class TweetDataHandler:
         """
         Function to retrieve CSV data source, based on information contained within the config dictionary.
         """
-        if self.config["isImport"] == True:
-            tweet_object = self.data_sources[data_source]
-            #File path extension index in data_sources values
-            file_path = tweet_object[0][0]
-           
-            #File extension index in data_sources values
-            file_ext = tweet_object[0][1]
-            
-            #Number of files index in data_sources values
-            number_of_files = tweet_object[0][2]
-            data = pd.DataFrame()
 
-            #Loop through file path for number of files to be imported
-            for i in range(number_of_files):
-                #TO DO: below condition may be causing issue with importing single file, requires debugging
-                if i != 0:
-                    self.msg_handle("msg_import")
+        tweet_object = self.data_sources[data_source]
+        #File path extension index in data_sources values
+        file_path = tweet_object[0][0]
+       
+        #File extension index in data_sources values
+        file_ext = tweet_object[0][1]
+        
+        #Number of files index in data_sources values
+        number_of_files = tweet_object[0][2]
+        data = pd.DataFrame()
 
-                    #Read csv file into dataframe
-                    df = pd.read_csv(self.my_path + file_path + str(i) + file_ext)
-                    
-                    #Append csv file to dataframe
-                    data = data.append(df)
-                    self.msg_handle("msg_append")
-            return data
-    
+        #Loop through file path for number of files to be imported
+        file_num = 1
+        
+        while file_num <= number_of_files:
+                self.msg_handle("msg_import")
+
+                #Read csv file into dataframe
+                df = pd.read_csv(self.my_path + file_path + str(file_num) + file_ext)
+                
+                #Append csv file to dataframe
+                data = data.append(df)
+                self.msg_handle("msg_append")
+                file_num += 1
+        return data
+
     def get_hash_tags(self,df,df_col):
         """
         Function to retrieve hash tags from data. Returns a series of hashtags to join to the troll tweet datafrme
@@ -152,7 +158,18 @@ class TweetDataHandler:
         distinct_hash_tags = set([item for sublist in hash_tags_list for item in sublist])
 
         return (hash_tag_series, distinct_hash_tags)
-
+    
+    def get_cat_hash_tags(self):
+        """
+        Function to return hashtags by account category
+        """
+        hashtag_set_list = []
+        for i in self.cat_list:
+            cat_hashtags = self.troll_tweet_df[self.troll_tweet_df['account_category'] == i]['hash_tags'].tolist()
+            hashtag_set_list.append(set([item for sublist in cat_hashtags for item in sublist]))
+        
+        return hashtag_set_list
+            
 
     def put_hash_tags(self,df,df_col):
         """
@@ -170,6 +187,8 @@ class TweetDataHandler:
 
         #Join hash_tag_series to dataframe
         df = pd.concat([df, hash_tag_series], axis=1, join='inner')
+        distinct_hash_tags = pd.Series(list(distinct_hash_tags),name='distinct_hashtags')
+        
         return (df,distinct_hash_tags)
     
     def run_troll_tweets(self):
@@ -189,103 +208,104 @@ class TweetDataHandler:
 
         #Assign distinct_hash_tags to list of distinct hash tags returned from put_hash_tags function
         self.distinct_hash_tags = self.troll_tweets[1]
-        return self.troll_tweet_df, self.distinct_hash_tags
-
-    def translate_tweets(self, df):
-        """
-        Method to translate tweets of foreign languages to english for NLP methods. A dataframe is passed to the
-        method, and the values located in the 'content' column are translated to english if the language is not
-        english.
-
-        TO DO: Attempt to optimize translation, as it is taking much time to complete. May be worth looking at not
-        using autodetection, for the language is in the dataframe, although it is not in the two letter abrv as required
-        by the Translator constructor. 
-        """
-        #Access tweet content in data frame
-        text = df['content']
-
-        #Condition to check if language is english
-        if df['language'] != 'English':
-
-            #Construct translator with autodetect and target language as english
-            trans = Translator(from_lang = "autodetect", to_lang='en')
-
-            #Function to translate text in dataframe column
-            text = trans.translate(text)
-
-        #Assigne dataframe column value to text
-        df['content'] = text
-        return df
         
+        #Store distinct hash tags for later use
+        if self.config["isSavePreproc"] == True:
+            self.distinct_hash_tags.to_csv(self.my_path + "\\data\\" + "Processed\\distinct_hashtags.csv")
+        
+        return (self.troll_tweet_df, self.distinct_hash_tags)
     
+    def get_tweet_sentiment(self, tweet):
+        """
+        Function to retrieve tweet sentiment for tweets using TextBlob
+        """
+        analysis = TextBlob(tweet)
+        
+        return list(analysis.sentiment_assessments)
+
+        
     def tweet_pre_processing(self):
         """
         Method used for manipulating tweet content for NLP methods and text analytics.
         Includes steps for:
         1) Removing hyperlinks
         2) Removing hash tags
-        3) Translate non-english tweets
-            TO DO: Optimize, currently taking much time and has been temporarily commented out
-        4) Remove punctuation
+        3) Remove punctuation
         5) Make all words lower case
         6) Remove Stop-words
-            TO DO: Add additional stop-words to list
-        7) Spelling correction
-            TO DO: Optimize, currently taking much time and has been temporarily commented out
-        8) Lemmatization
+        7) Lemmatization
+        8) Sentiment Analysis
         """
+   
+        
         #Condition to check if pre-processing is enabled, if false method retrieves processed data from csv file location
         if self.config["isPreProc"] == True:
             
-            #Copy twitter data for pre-processing
-            self.processed_tweets = self.troll_tweet_data[['content','language']]
+            #Run troll tweet process
+            self.tweedle_collection = self.run_troll_tweets()
+            self.troll_tweet_df = self.tweedle_collection[0]
+            self.distinct_hashtags = self.tweedle_collection[1]
             
-            #TEMP : Will not filter data frame to only english tweetsonce translator is optimized
-            self.processed_tweets = self.processed_tweets[self.processed_tweets['language'] == 'English']
+            #Copy twitter data for pre-processing
+            self.troll_tweet_df = self.troll_tweet_df[self.troll_tweet_df['language'] == 'English']
 
             #Filter null tweet content
-            self.processed_tweets = self.processed_tweets[self.processed_tweets['content'].isna() == False]
+            self.processed_tweets = pd.Series(self.troll_tweet_df['content'],index=self.troll_tweet_df.index, name='processed_content')
             
             #Removing hyperlinks from twitter data, regular expression used to identify URLS, placed before hash tag and punctuation removal to effectively do so
             self.msg_handle("msg_preproc_links")
-            self.processed_tweets['content'] = self.processed_tweets['content'].str.replace(r'\w+:\/{2}[\d\w-]+(\.[\d\w-]+)*(?:(?:\/[^\s/]*))*','')
+            self.processed_tweets = self.processed_tweets.str.replace(r'\w+:\/{2}[\d\w-]+(\.[\d\w-]+)*(?:(?:\/[^\s/]*))*','')
             
             #Removing hash tags from twitter data, regular expression used to replace tweets with nothing
             self.msg_handle("msg_preproc_tags")
-            self.processed_tweets['content'] = self.processed_tweets['content'].str.replace('#(\w+)','')
+            self.processed_tweets = self.processed_tweets.str.replace('#(\w+)','')
             
-            #TO DO: Optimize, currently taking long amount of time
-            #Translate tweets
-            #self.msg_handle("msg_preproc_trans")
-            #self.processed_tweets[['language','content']] = self.processed_tweets[['language','content']].apply(self.translate_tweets, axis=1) 
-            
+                     
             #Removing punctuation from twitter data, regular expression used to replace punctuation with nothing
             self.msg_handle("msg_preproc_punct")
-            self.processed_tweets['content'] = self.processed_tweets['content'].str.replace('[^\w\s]','')
+            self.processed_tweets = self.processed_tweets.str.replace('[^\w\s]','')
             
-    
+            
+            #Removing null tweets, after applying preprocessing for other pre-processing methods
+            self.processed_tweets = self.processed_tweets[self.processed_tweets.isna() == False]
+            
             #Making twitter data lower case
             self.msg_handle("msg_preproc_lower")
-            self.processed_tweets['content'] = self.processed_tweets['content'].apply(lambda x: " ".join(x.lower() for x in x.split()))
+            self.processed_tweets= self.processed_tweets.apply(lambda x: " ".join(x.lower() for x in x.split()))
             
             
             #Removing stopwords from twitter data
             self.msg_handle("msg_preproc_stop")
             stop = stopwords.words('english')
-            self.processed_tweets['content'] = self.processed_tweets['content'].apply(lambda x: " ".join(x for x in x.split() if x not in stop))
+            self.processed_tweets = self.processed_tweets.apply(lambda x: " ".join(x for x in x.split() if x not in stop))
             
-            #TO DO: Optimize, currently taking long amount of time
-            #Spelling correction
-            #self.msg_handle("msg_preproc_spell")
-            #self.processed_tweets['content'] = self.processed_tweets['content'].apply(lambda x: str(TextBlob(x).correct()))
             
             #Lemmatization
             self.msg_handle("msg_preproc_lemma")
-            self.processed_tweets['content'] = self.processed_tweets['content'].apply(lambda x: " ".join([Word(word).lemmatize() for word in x.split()]))
-            self.processed_tweets.to_csv(self.my_path + "\\data\\" + "Processed\\processed_tweets.csv")
+            self.processed_tweets = self.processed_tweets.apply(lambda x: " ".join([Word(word).lemmatize() for word in x.split()]))
+                       
+            
+            #Join processed tweets to dataframe
+            self.troll_tweet_df = self.troll_tweet_df.join(self.processed_tweets, how='left')
+            
+            #Get Tweet Sentiment - polarity, subjectivity and textblob assessments
+            self.msg_handle("msg_preproc_sentiment")
+            self.troll_tweet_df['sentiment'] = self.troll_tweet_df['processed_content'].apply(self.get_tweet_sentiment)
+            
+            #Split tweet sentiment containing list  into muliple columns
+            self.msg_handle("msg_preproc_splitcols")
+            self.troll_tweet_df[['sent_polarity', 'sent_subjectivity', 'sent_assessments']] = pd.DataFrame(self.troll_tweet_df.sentiment.values.tolist(), index=self.troll_tweet_df.index)
+
+            
+            #Store processed tweets to CSV for later use
+            if self.config["isSavePreproc"] == True:
+                self.msg_handle("msg_preproc_save")
+                self.troll_tweet_df.to_csv(self.my_path + "\\data\\" + "Processed\\processed_tweets.csv")
             
         else:
-            self.processed_tweets = pd.read_csv(self.my_path + "\\data\\" + "Processed\\processed_tweets.csv")
+            self.msg_handle("msg_import_preproc")
+            self.troll_tweet_df = pd.read_csv(self.my_path + "\\data\\" + "Processed\\processed_tweets.csv")
+            self.distinct_hashtags = pd.read_csv(self.my_path + "\\data\\" + "Processed\\distinct_hashtags.csv")
             
-        return self.processed_tweets
+        return (self.troll_tweet_df, self.distinct_hashtags)
        

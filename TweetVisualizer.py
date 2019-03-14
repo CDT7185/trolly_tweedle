@@ -13,7 +13,7 @@ from PIL import Image
 from wordcloud import WordCloud, STOPWORDS, ImageColorGenerator
 from collections import Counter
 import matplotlib.pyplot as plt
-
+from matplotlib_venn import venn3
 
 class TweetVisualizer:
     """
@@ -26,10 +26,11 @@ class TweetVisualizer:
         content. The tweet_pre_processing method is also executed, which performs pre-processing steps on the tweets for later NLP methods. 
         """
         self.tweedle = tdh.TweetDataHandler()
-        self.tweedle_collection = self.tweedle.run_troll_tweets()
+        self.tweedle_collection = self.tweedle.tweet_pre_processing()
+        self.hashtag_categories = self.tweedle.get_cat_hash_tags()
         self.troll_tweet_df = self.tweedle_collection[0]
         self.distinct_hashtags = self.tweedle_collection[1]
-        self.processed_tweets = self.tweedle.tweet_pre_processing()
+        
    
     def hbar_tweets_by_col(self,column):
         """
@@ -83,17 +84,42 @@ class TweetVisualizer:
         """
         #Condition used to filter the dataframe according to the optional "account_category" parameter.
         #Filter out null values, which cause an issue for the wordcloud constructor, some tweets do not have content following
-        #the pre-processing steps. i.e Content solely includes URL and hashtags, etc.
+        #the pre-processing steps. i.e Content does not include URL and hashtags, etc.
 
         if account_category is not None:
-            tweet_content = self.processed_tweets[self.processed_tweets['account_category'] == account_category]
-            tweet_content = tweet_content[tweet_content['content'].isna() == False]['content']
+            tweet_content = self.troll_tweet_df[self.troll_tweet_df['account_category'] == account_category]
+            tweet_content = tweet_content[tweet_content['processed_content'].isna() == False]['processed_content']
             
         else:
-            tweet_content = self.processed_tweets[self.processed_tweets['content'].isna() == False]['content']
+            tweet_content = self.processed_tweets[self.processed_tweets['processed_content'].isna() == False]['processed_content']
         wordcloud = WordCloud(max_font_size=50, max_words = 100, background_color='white').generate(' '.join(tweet_content))
         plt.figure()
         plt.imshow(wordcloud, interpolation='bilinear')
         plt.axis("off")
         plt.title("Tweet Content Cloud : Category -  " + str(account_category) )
-        plt.show() 
+        plt.show()
+    
+    def venn_hashtags(self, account_category_list):
+        """
+        Method to generate a venn diagram containing matching distinct hashtag values for each account category to show the relationship
+        between each account categories messaging"""
+        
+        if len(account_category_list) > 3:
+            raise Exception('May only provide up to 3 values for venn diagram.')
+        else:
+            sets = {
+            "Fearmonger" : self.hashtag_categories[0],
+            "Commercial" : self.hashtag_categories[1],
+            "Gamer" : self.hashtag_categories[2],
+            "Left Troll" : self.hashtag_categories[3],
+            "News Feed" : self.hashtag_categories[4],
+            "Right Troll" : self.hashtag_categories[5]
+                    }
+            set_list = [sets[i] for i in account_category_list]
+            
+            venn3(set_list, (account_category_list[0], account_category_list[1], account_category_list[2]))      
+            plt.title("Shared Hashtags by Account Category:")
+            plt.show()
+       
+             
+
