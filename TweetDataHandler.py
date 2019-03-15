@@ -41,7 +41,7 @@ class TweetDataHandler:
         """
         self.data_sources = {
             "troll_tweets" : [
-                    ["\\data\\IRAhandle_tweets_",".csv",9],
+                    ["\\data\\IRAhandle_tweets_",".csv",2],
                     ['external_author_id',
                      'author',
                      'content',
@@ -64,7 +64,7 @@ class TweetDataHandler:
         self.config = {
             "isMsg": True,
             "isTimed":False,
-            "isPreProc":False,
+            "isPreProc":True,
             "isSavePreproc": False,
             "msg_import":'status : reading file into temp data frame',
             "msg_import_preproc":'status : reading preprocessed file into dataframe',
@@ -260,25 +260,22 @@ class TweetDataHandler:
             self.msg_handle("msg_preproc_tags")
             self.processed_tweets = self.processed_tweets.str.replace('#(\w+)','')
             
-                     
+            #Removing stopwords from twitter data
+            self.msg_handle("msg_preproc_stop")
+            stop = stopwords.words('english')
+            self.processed_tweets = self.processed_tweets.apply(lambda x: " ".join(x for x in x.split() if x not in stop))
+            
             #Removing punctuation from twitter data, regular expression used to replace punctuation with nothing
             self.msg_handle("msg_preproc_punct")
             self.processed_tweets = self.processed_tweets.str.replace('[^\w\s]','')
-            
-            
+                       
             #Removing null tweets, after applying preprocessing for other pre-processing methods
             self.processed_tweets = self.processed_tweets[self.processed_tweets.isna() == False]
             
             #Making twitter data lower case
             self.msg_handle("msg_preproc_lower")
             self.processed_tweets= self.processed_tweets.apply(lambda x: " ".join(x.lower() for x in x.split()))
-            
-            
-            #Removing stopwords from twitter data
-            self.msg_handle("msg_preproc_stop")
-            stop = stopwords.words('english')
-            self.processed_tweets = self.processed_tweets.apply(lambda x: " ".join(x for x in x.split() if x not in stop))
-            
+        
             
             #Lemmatization
             self.msg_handle("msg_preproc_lemma")

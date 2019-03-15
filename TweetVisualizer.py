@@ -8,12 +8,13 @@ Created on Sat Mar  2 10:01:00 2019
 import TweetDataHandler as tdh
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from os import path
 from PIL import Image
 from wordcloud import WordCloud, STOPWORDS, ImageColorGenerator
 from collections import Counter
-import matplotlib.pyplot as plt
-from matplotlib_venn import venn3
+from matplotlib_venn import venn2, venn2_circles
+
 
 class TweetVisualizer:
     """
@@ -42,10 +43,17 @@ class TweetVisualizer:
         df = df.reset_index()
         
         #Setup & show matplot lib figure for number of tweets per column
+        x_ax = [500000, 1000000, 1500000, 2000000, 2500000, 3000000, 3500000, 4000000, 4500000]
+        x_lab =  ['500,000', '1,000,000', '1,500,000', '2,000,000', '2,500,000', '3,000,000', '3,500,000' ,'4,000,000', '4,500,000']
         y_pos = np.arange(len(df['index']))
         number_of_tweets = df[column]
+        
+        for i, v in enumerate(number_of_tweets):
+            plt.text(v, i, " "+ "{:,}".format(v), va='center', fontweight='bold')
+            
         plt.barh(y_pos, number_of_tweets, align='center')
         plt.yticks(y_pos,df['index'])
+        plt.xticks(x_ax, labels = x_lab , rotation = '90')
         plt.xlabel('Number of Tweets')
 
         #Display title containing the column used to group the numerical "number of tweets" data
@@ -63,7 +71,7 @@ class TweetVisualizer:
         if account_category == None:
             tags = [tag.lower() for row in self.troll_tweet_df['hash_tags'] for tag in row]
         else:
-            tags = [tag.lower() for row in self.troll_tweet_df[self.troll_tweet_df['account_category'] == account_category]['hash_tags'] for tag in row]
+            tags = [tag.lower() for row in self.troll_tweet_df[self.troll_tweet_df['account_category'] == account_category]['hash_tags'] for tag in row if len(tag) > 3]
        
         #Create a dictionary containing a count for each hash tag contained within the "hash tags" list
         word_cloud_dict = Counter(tags)
@@ -91,7 +99,7 @@ class TweetVisualizer:
             tweet_content = tweet_content[tweet_content['processed_content'].isna() == False]['processed_content']
             
         else:
-            tweet_content = self.processed_tweets[self.processed_tweets['processed_content'].isna() == False]['processed_content']
+            tweet_content = self.troll_tweet_df[self.troll_tweet_df['processed_content'].isna() == False]['processed_content']
         wordcloud = WordCloud(max_font_size=50, max_words = 100, background_color='white').generate(' '.join(tweet_content))
         plt.figure()
         plt.imshow(wordcloud, interpolation='bilinear')
@@ -104,8 +112,8 @@ class TweetVisualizer:
         Method to generate a venn diagram containing matching distinct hashtag values for each account category to show the relationship
         between each account categories messaging"""
         
-        if len(account_category_list) > 3:
-            raise Exception('May only provide up to 3 values for venn diagram.')
+        if len(account_category_list) > 2:
+            raise Exception('May only provide up to 2 values for venn diagram.')
         else:
             sets = {
             "Fearmonger" : self.hashtag_categories[0],
@@ -115,9 +123,13 @@ class TweetVisualizer:
             "News Feed" : self.hashtag_categories[4],
             "Right Troll" : self.hashtag_categories[5]
                     }
-            set_list = [sets[i] for i in account_category_list]
+            set_list = [sets[i] for i in account_category_list]            
+            v = venn2(set_list, (account_category_list[0], account_category_list[1]))
+            c = venn2_circles(subsets = set_list, linestyle='dashed', color='grey', linewidth=1.0)
             
-            venn3(set_list, (account_category_list[0], account_category_list[1], account_category_list[2]))      
+            c[0].set_lw(1.0)
+            c[0].set_ls('dotted')
+
             plt.title("Shared Hashtags by Account Category:")
             plt.show()
        
