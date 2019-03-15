@@ -7,15 +7,19 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt; plt.rcdefaults()
 import re
+
+from ast import literal_eval
 from os import getcwd
 from nltk.corpus import stopwords
 from textblob import TextBlob, Word
 from translate import Translator
+from tqdm import tqdm
 
 
 
 #Configure pandas option to display all columns included within the dataframe
 pd.set_option('display.max_columns',19)
+tqdm.pandas(desc="Progress: ")
 
 class TweetDataHandler:
     """
@@ -63,15 +67,17 @@ class TweetDataHandler:
         
         self.config = {
             "isMsg": True,
-            "isTimed":False,
             "isPreProc":True,
             "isSavePreproc": False,
             "msg_import":'status : reading file into temp data frame',
             "msg_import_preproc":'status : reading preprocessed file into dataframe',
+            "msg_import_preproc_convert":'status : converting CSV string back to list',
             "msg_append":'status : appending temp data to data frame',
             "msg_summary": 'status : summarizing data',
             "msg_calculations":'status : performing calculations',
             "msg_preproc_lower":'status : making tweets lower case',
+            "msg_trans_follow":'status : creating followers and following dataframe',
+            "msg_preproc_hashtagcat":'status : creating sets of hashtags by account category',
             "msg_preproc_punct":'status : removing tweet punctuation',
             "msg_preproc_tags":'status : removing hashtags from tweets',
             "msg_preproc_stop":'status : removing stopwords from tweets',
@@ -163,11 +169,12 @@ class TweetDataHandler:
         """
         Function to return hashtags by account category
         """
+        self.msg_handle("msg_preproc_hashtagcat")
         hashtag_set_list = []
         for i in self.cat_list:
             cat_hashtags = self.troll_tweet_df[self.troll_tweet_df['account_category'] == i]['hash_tags'].tolist()
-            hashtag_set_list.append(set([item for sublist in cat_hashtags for item in sublist]))
-        
+            hashtag_set_list.append(set([item for sublist in cat_hashtags for item in sublist]))        
+            
         return hashtag_set_list
             
 
@@ -215,6 +222,25 @@ class TweetDataHandler:
         
         return (self.troll_tweet_df, self.distinct_hash_tags)
     
+    def latest_followers_and_following(self):
+        self.msg_handle("msg_trans_follow")
+        self.author_df = self.troll_tweet_df[['author', 'publish_date', 'account_category']]
+        self.author_follow_df = self.troll_tweet_df[['author', 'publish_date', 'account_category', 'following', 'followers']]
+
+        # Create tweet author df, grouping by the max tweet date
+        self.author_df = self.author_df.groupby(by=['author', 'account_category'], as_index=False).max()
+
+        # Join followers info by author, account_category and publish date, getting latest followers for each tweeter
+        self.followers_and_following = self.author_df.merge(self.author_follow_df,
+                                                           on=['author', 'account_category', 'publish_date'],
+                                                           how='left')
+
+        # Drop duplicates from data frame
+        self.followers_and_following = self.followers_and_following.drop_duplicates(inplace=False)
+
+        return self.followers_and_following
+       
+    
     def get_tweet_sentiment(self, tweet):
         """
         Function to retrieve tweet sentiment for tweets using TextBlob
@@ -222,8 +248,8 @@ class TweetDataHandler:
         analysis = TextBlob(tweet)
         
         return list(analysis.sentiment_assessments)
-
-        
+    
+    
     def tweet_pre_processing(self):
         """
         Method used for manipulating tweet content for NLP methods and text analytics.
@@ -263,7 +289,7 @@ class TweetDataHandler:
             #Removing stopwords from twitter data
             self.msg_handle("msg_preproc_stop")
             stop = stopwords.words('english')
-            self.processed_tweets = self.processed_tweets.apply(lambda x: " ".join(x for x in x.split() if x not in stop))
+            self.processed_tweets = self.processed_tweets.progress_apply(lambda x: " ".join(x for x in x.split() if x not in stop))
             
             #Removing punctuation from twitter data, regular expression used to replace punctuation with nothing
             self.msg_handle("msg_preproc_punct")
@@ -274,12 +300,12 @@ class TweetDataHandler:
             
             #Making twitter data lower case
             self.msg_handle("msg_preproc_lower")
-            self.processed_tweets= self.processed_tweets.apply(lambda x: " ".join(x.lower() for x in x.split()))
+            self.processed_tweets= self.processed_tweets.progress_apply(lambda x: " ".join(x.lower() for x in x.split()))
         
             
             #Lemmatization
             self.msg_handle("msg_preproc_lemma")
-            self.processed_tweets = self.processed_tweets.apply(lambda x: " ".join([Word(word).lemmatize() for word in x.split()]))
+            self.processed_tweets = self.processed_tweets.progress_apply(lambda x: " ".join([Word(word).lemmatize() for word in x.split()]))
                        
             
             #Join processed tweets to dataframe
@@ -287,7 +313,7 @@ class TweetDataHandler:
             
             #Get Tweet Sentiment - polarity, subjectivity and textblob assessments
             self.msg_handle("msg_preproc_sentiment")
-            self.troll_tweet_df['sentiment'] = self.troll_tweet_df['processed_content'].apply(self.get_tweet_sentiment)
+            self.troll_tweet_df['sentiment'] = self.troll_tweet_df['processed_content'].progress_apply(self.get_tweet_sentiment)
             
             #Split tweet sentiment containing list  into muliple columns
             self.msg_handle("msg_preproc_splitcols")
@@ -302,7 +328,14 @@ class TweetDataHandler:
         else:
             self.msg_handle("msg_import_preproc")
             self.troll_tweet_df = pd.read_csv(self.my_path + "\\data\\" + "Processed\\processed_tweets.csv")
-            self.distinct_hashtags = pd.read_csv(self.my_path + "\\data\\" + "Processed\\distinct_hashtags.csv")
             
-        return (self.troll_tweet_df, self.distinct_hashtags)
-       
+            #Literal evaluation of hashtag column for it is read as a string value instead of a list
+            self.msg_handle("msg_import_preproc_convert")
+            self.troll_tweet_df['hash_tags'] = self.troll_tweet_df['hash_tags'].progress_apply(lambda x: literal_eval(x))
+            self.distinct_hashtags = pd.read_csv(self.my_path + "\\data\\" + "Processed\\distinct_hashtags.csv")
+        
+        self.followers_and_following_df = self.latest_followers_and_following()
+        self.hashtag_set_list = self.get_cat_hash_tags()
+        return (self.troll_tweet_df, self.distinct_hashtags, self.followers_and_following_df, self.hashtag_set_list)
+                
+    

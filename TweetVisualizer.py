@@ -9,6 +9,7 @@ import TweetDataHandler as tdh
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
 from os import path
 from PIL import Image
 from wordcloud import WordCloud, STOPWORDS, ImageColorGenerator
@@ -28,9 +29,10 @@ class TweetVisualizer:
         """
         self.tweedle = tdh.TweetDataHandler()
         self.tweedle_collection = self.tweedle.tweet_pre_processing()
-        self.hashtag_categories = self.tweedle.get_cat_hash_tags()
         self.troll_tweet_df = self.tweedle_collection[0]
         self.distinct_hashtags = self.tweedle_collection[1]
+        self.followers_and_follwoing = self.tweedle_collection[2]
+        self.hashtag_categories = self.tweedle_collection[3]
         
    
     def hbar_tweets_by_col(self,column):
@@ -71,7 +73,7 @@ class TweetVisualizer:
         if account_category == None:
             tags = [tag.lower() for row in self.troll_tweet_df['hash_tags'] for tag in row]
         else:
-            tags = [tag.lower() for row in self.troll_tweet_df[self.troll_tweet_df['account_category'] == account_category]['hash_tags'] for tag in row if len(tag) > 3]
+            tags = [tag.lower() for row in self.troll_tweet_df[self.troll_tweet_df['account_category'] == account_category]['hash_tags'] for tag in row]
        
         #Create a dictionary containing a count for each hash tag contained within the "hash tags" list
         word_cloud_dict = Counter(tags)
