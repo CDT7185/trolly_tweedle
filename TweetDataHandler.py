@@ -23,26 +23,39 @@ tqdm.pandas(desc="Progress: ")
 
 class TweetDataHandler:
     """
-    Class used for data extraction and pre-processing, imported in other modules for analysis and visualization
+    Class used for data extraction and pre-processing, used in other modules for analysis and visualization
     of the tweet data.
     """
 
     def __init__(self):
         """
-        Method for inializing configurations and data sources for the program. Additional data sources may be added
-        to the dictionary, which contain the relevent path file type, and number of files for import. 
+        Method for inializing configurations and data source information for the program. Additional data sources may be added
+        to the dictionary in future, which contain the relevent path file type, and number of files for import. 
         
-        The number of files for import is useful for testing purposes, as a means of reducing the time taken to run the program.
+        The number of files for import is useful for testing purposes, as a means of reducing the time taken to run the program--
+        where the user can specify a lesser amount for the purpose of faster execution.
+        
         The "IsImport" configuration will achieve a similar effect, where the program will not re-import data if already
-        contained in cache. The "isMsg" configuration prints the status of program execution, also helpful while testing the program.
+        contained in cache. 
+        
 
         The "isPreProc" configuration specifies whether the program will execute the pre-processing steps at run time, or retrieve the
-        processed data from a file directory.
+        processed data from a file directory. Retrieving data from the file directory increases the speed of the program for it does
+        not need to reprocess the data.
+        
+        The "isSavePreproc" configuration determines whether the processed data file is stored. If the setting is set to True, the 
+        program will save the newly processed file to the designated location. If testing other features, and the preprocessed data is
+        fine and the user sets the file number to less than the amount of files, this setting should be set to false to ensure the
+        comprehensive dataset is not overwritten.
+        
+        The "isMsg" configuration prints the status of program execution, also helpful while testing the program, but may be turned
+        off after testing as it is less verbose. The settings pre-fixed with "msg_" are preset messages that display when the
+        msg_handle method is called. The method checks the "isMsg" configuration before printing the status of execution.
 
         """
         self.data_sources = {
             "troll_tweets" : [
-                    ["\\data\\IRAhandle_tweets_",".csv",9],
+                    ["\\data\\IRAhandle_tweets_",".csv",2],
                     ['external_author_id',
                      'author',
                      'content',
@@ -64,8 +77,8 @@ class TweetDataHandler:
         
         self.config = {
             "isMsg": True,
-            "isPreProc":False,
-            "isSavePreproc": False,
+            "isPreProc":True,
+            "isSavePreproc": True,
             "msg_import":'status : reading file into temp data frame',
             "msg_import_preproc":'status : reading preprocessed file into dataframe',
             "msg_import_preproc_convert":'status : converting CSV string back to list',
@@ -73,7 +86,6 @@ class TweetDataHandler:
             "msg_summary": 'status : summarizing data',
             "msg_calculations":'status : performing calculations',
             "msg_preproc_lower":'status : making tweets lower case',
-            "msg_trans_follow":'status : creating followers and following dataframe',
             "msg_preproc_hashtagcat":'status : creating sets of hashtags by account category',
             "msg_preproc_complete":'status : data preprocessing complete',
             "msg_preproc_class":'status : classifying tweets by sentiment polarity value',
@@ -82,7 +94,7 @@ class TweetDataHandler:
             "msg_preproc_stop":'status : removing stopwords from tweets',
             "msg_preproc_lemma":'status : performing tweet lemmatization',
             "msg_preproc_splitcols":'status : splitting dataframe column',
-            "msg_preproc_save":'status : saving processed tweets',
+            "msg_preproc_save":'status : saving processed tweets, you can change the configuration to utilize this dataset after completing.',
             "msg_hash_links":'status : removing hyperlinks from tweets',
             "msg_preproc_sentiment":'status : calculating tweet sentiment',
             "msg_hash_tag":'status : retrieving and storing tweet hash tags for analysis',
@@ -128,14 +140,15 @@ class TweetDataHandler:
         
         while file_num <= number_of_files:
                 self.msg_handle("msg_import")
-
+               
                 #Read csv file into dataframe
                 df = pd.read_csv(self.my_path + file_path + str(file_num) + file_ext)
-                
+
                 #Append csv file to dataframe
                 data = data.append(df)
                 self.msg_handle("msg_append")
                 file_num += 1
+                
         return data
 
     def get_hash_tags(self,df,df_col):
@@ -220,29 +233,12 @@ class TweetDataHandler:
             self.distinct_hash_tags.to_csv(self.my_path + "\\data\\" + "Processed\\distinct_hashtags.csv")
         
         return (self.troll_tweet_df, self.distinct_hash_tags)
-    
-    def latest_followers_and_following(self):
-        self.msg_handle("msg_trans_follow")
-        self.author_df = self.troll_tweet_df[['author', 'publish_date', 'account_category']]
-        self.author_follow_df = self.troll_tweet_df[['author', 'publish_date', 'account_category', 'following', 'followers']]
-
-        # Create tweet author df, grouping by the max tweet date
-        self.author_df = self.author_df.groupby(by=['author', 'account_category'], as_index=False).max()
-
-        # Join followers info by author, account_category and publish date, getting latest followers for each tweeter
-        self.followers_and_following = self.author_df.merge(self.author_follow_df,
-                                                           on=['author', 'account_category', 'publish_date'],
-                                                           how='left')
-
-        # Drop duplicates from data frame
-        self.followers_and_following = self.followers_and_following.drop_duplicates(inplace=False)
-
-        return self.followers_and_following
        
     
     def get_tweet_sentiment(self, tweet):
         """
-        Function to retrieve tweet sentiment for tweets using TextBlob
+        Function to retrieve tweet sentiment for tweets using TextBlob, includes polarity, subjectivity and individual
+        assessments of significant words
         """
         analysis = TextBlob(tweet)
         
@@ -259,7 +255,7 @@ class TweetDataHandler:
         5) Make all words lower case
         6) Remove Stop-words
         7) Lemmatization
-        8) Sentiment Analysis
+        8) Sentiment Analysis calculations
         """
    
         
@@ -284,6 +280,7 @@ class TweetDataHandler:
             #Removing hash tags from twitter data, regular expression used to replace tweets with nothing
             self.msg_handle("msg_preproc_tags")
             self.processed_tweets = self.processed_tweets.str.replace('#(\w+)','')
+            self.processed_tweets = self.processed_tweets[self.processed_tweets.isna()==False]
             
             #Removing stopwords from twitter data
             self.msg_handle("msg_preproc_stop")
@@ -343,10 +340,8 @@ class TweetDataHandler:
             self.troll_tweet_df['hash_tags'] = self.troll_tweet_df['hash_tags'].progress_apply(lambda x: literal_eval(x))
             self.distinct_hashtags = pd.read_csv(self.my_path + "\\data\\" + "Processed\\distinct_hashtags.csv")
         
-        self.followers_and_following_df = self.latest_followers_and_following()
         self.hashtag_set_list = self.get_cat_hash_tags()
         
         self.msg_handle("msg_preproc_complete")
-        return (self.troll_tweet_df, self.distinct_hashtags, self.followers_and_following_df, self.hashtag_set_list)
-                
+        return (self.troll_tweet_df, self.distinct_hashtags, self.hashtag_set_list)
     

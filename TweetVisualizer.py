@@ -9,8 +9,10 @@ import TweetDataHandler as tdh
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+#import matplotlib.patches as mpatches
 import seaborn as sns
-import matplotlib.patches as mpatches
+
 
 from os import path
 from PIL import Image
@@ -27,14 +29,14 @@ class TweetVisualizer:
         """
         Initializes the tweet visualizer class, setting the tweedle_collection attribute to data retrieved from the TweetDataHandler class. From the
         tweedle_collection attribute, the data frame from the troll tweets is derived, as well as the distinct hash tags contained within the tweet
-        content. The tweet_pre_processing method is also executed, which performs pre-processing steps on the tweets. 
+        content, and the hashtag categories. Calling the tweet_pre_processing method performs text processing and sentiment
+        analysis on tweets' content.
         """
         self.tweedle = tdh.TweetDataHandler()
         self.tweedle_collection = self.tweedle.tweet_pre_processing()
         self.troll_tweet_df = self.tweedle_collection[0]
         self.distinct_hashtags = self.tweedle_collection[1]
-        self.followers_and_follwoing = self.tweedle_collection[2]
-        self.hashtag_categories = self.tweedle_collection[3]
+        self.hashtag_categories = self.tweedle_collection[2]
         
    
     def hbar_tweets_by_col(self,column):
@@ -47,8 +49,8 @@ class TweetVisualizer:
         df = df.reset_index()
         
         #Setup & show matplot lib figure for number of tweets per column
-        x_ax = [500000, 1000000, 1500000, 2000000, 2500000, 3000000, 3500000, 4000000, 4500000]
-        x_lab =  ['500,000', '1,000,000', '1,500,000', '2,000,000', '2,500,000', '3,000,000', '3,500,000' ,'4,000,000', '4,500,000']
+        fig, ax = plt.subplots()
+        
         y_pos = np.arange(len(df['index']))
         number_of_tweets = df[column]
         
@@ -57,7 +59,10 @@ class TweetVisualizer:
             
         plt.barh(y_pos, number_of_tweets, align='center')
         plt.yticks(y_pos,df['index'])
-        plt.xticks(x_ax, labels = x_lab , rotation = '90')
+        
+        plt.xticks(rotation = '75')
+        
+        ax.xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter('{x:,.0f}'))
         plt.xlabel('Number of Tweets')
 
         #Display title containing the column used to group the numerical "number of tweets" data
@@ -72,21 +77,24 @@ class TweetVisualizer:
         """
         #Condition used to filter the dataframe according to the optional "account_category" parameter.
         #List comprehension  is used to create a list of each hash tag sublist contained in the troll tweet data frame
-        if account_category == None:
-            tags = [tag.lower() for row in self.troll_tweet_df['hash_tags'] for tag in row]
-        else:
-            tags = [tag.lower() for row in self.troll_tweet_df[self.troll_tweet_df['account_category'] == account_category]['hash_tags'] for tag in row]
-       
-        #Create a dictionary containing a count for each hash tag contained within the "hash tags" list
-        word_cloud_dict = Counter(tags)
-        wordcloud = WordCloud(max_font_size=50, max_words = 100, background_color='white').generate_from_frequencies(word_cloud_dict)
-        plt.figure()
-        plt.imshow(wordcloud, interpolation='bilinear')
-
-        #Turn off axis as it there is none used for a wordcloud visualization
-        plt.axis("off")
-        plt.title("Hash Tag Word Cloud : Category - " + str(account_category))
-        plt.show()
+        try:
+            if account_category == None:
+                tags = [tag.lower() for row in self.troll_tweet_df['hash_tags'] for tag in row]
+            else:
+                tags = [tag.lower() for row in self.troll_tweet_df[self.troll_tweet_df['account_category'] == account_category]['hash_tags'] for tag in row]
+           
+            #Create a dictionary containing a count for each hash tag contained within the "hash tags" list
+            word_cloud_dict = Counter(tags)
+            wordcloud = WordCloud(max_font_size=50, max_words = 100, background_color='white').generate_from_frequencies(word_cloud_dict)
+            plt.figure()
+            plt.imshow(wordcloud, interpolation='bilinear')
+    
+            #Turn off axis as it there is none used for a wordcloud visualization
+            plt.axis("off")
+            plt.title("Hash Tag Word Cloud : Category - " + str(account_category))
+            plt.show()
+        except ValueError:
+            print(f"Warning: No words available for wordcloud using account category : {account_category}")
     
     def wordcloud_tweets(self, account_category=None):
         """
@@ -98,18 +106,22 @@ class TweetVisualizer:
         #Filter out null values, which cause an issue for the wordcloud constructor, some tweets do not have content following
         #the pre-processing steps. i.e Content does not include URL and hashtags, etc.
 
-        if account_category is not None:
-            tweet_content = self.troll_tweet_df[self.troll_tweet_df['account_category'] == account_category]
-            tweet_content = tweet_content[tweet_content['processed_content'].isna() == False]['processed_content']
+        try:
+            if account_category is not None:
+                tweet_content = self.troll_tweet_df[self.troll_tweet_df['account_category'] == account_category]
+                tweet_content = tweet_content[tweet_content['processed_content'].isna() == False]['processed_content']
+                
+            else:
+                tweet_content = self.troll_tweet_df[self.troll_tweet_df['processed_content'].isna() == False]['processed_content']
             
-        else:
-            tweet_content = self.troll_tweet_df[self.troll_tweet_df['processed_content'].isna() == False]['processed_content']
-        wordcloud = WordCloud(max_font_size=50, max_words = 100, background_color='white').generate(' '.join(tweet_content))
-        plt.figure()
-        plt.imshow(wordcloud, interpolation='bilinear')
-        plt.axis("off")
-        plt.title("Tweet Content Cloud : Category -  " + str(account_category) )
-        plt.show()
+            wordcloud = WordCloud(max_font_size=50, max_words = 100, background_color='white').generate(' '.join(tweet_content))
+            plt.figure()
+            plt.imshow(wordcloud, interpolation='bilinear')
+            plt.axis("off")
+            plt.title("Tweet Content Cloud : Category -  " + str(account_category) )
+            plt.show()
+        except ValueError:
+            print(f"Warning: No words available for wordcloud using account category : {account_category}")
     
     def venn_hashtags(self, account_category_list):
         """
@@ -122,7 +134,7 @@ class TweetVisualizer:
             sets = {
             "Fearmonger" : self.hashtag_categories[0],
             "Commercial" : self.hashtag_categories[1],
-            "Gamer" : self.hashtag_categories[2],
+            "HashtagGamer" : self.hashtag_categories[2],
             "LeftTroll" : self.hashtag_categories[3],
             "NewsFeed" : self.hashtag_categories[4],
             "RightTroll" : self.hashtag_categories[5]
@@ -136,48 +148,51 @@ class TweetVisualizer:
 
             plt.title("Shared Hashtags by Account Category:")
             plt.show()
-    
+
     def donut_sentiment(self, account_category=None):
         """
         Method to generate a donut chart containing the breakdown of positive, neutral and negative tweets. User
         may specify an optional account category parameter to compare results across troll types
         """
-        #Prepare dataframe for viz
-        tweets = self.troll_tweet_df[['processed_content', 'account_category', 'class_sentiment']].drop_duplicates()
-        tweets_sent_count = tweets.groupby(by=['account_category', 'class_sentiment']).count()
-        
-        #Get values for pie group size
-        if account_category == None:
-            tweets = tweets_sent_count.groupby(by=['class_sentiment']).sum()
-            positive_tweets = tweets.loc['positive'].values
-            neutral_tweets = tweets.loc['neutral'].values
-            negative_tweets = tweets.loc['negative'].values
-        else:
-            tweets = tweets_sent_count.loc[account_category]
-            positive_tweets = tweets.loc['positive'].values
-            neutral_tweets = tweets.loc['neutral'].values
-            negative_tweets = tweets.loc['negative'].values
+        try:
+            #Prepare dataframe for viz
+            tweets = self.troll_tweet_df[['processed_content', 'account_category', 'class_sentiment']].drop_duplicates()
+            tweets_sent_count = tweets.groupby(by=['account_category', 'class_sentiment']).count()
             
-        #Create Colors, assign group size and names
-        pos_color, neu_color, neg_color = plt.cm.Greens, plt.cm.Greys, plt.cm.Reds
-        group_size = [positive_tweets, neutral_tweets, negative_tweets]
-        group_names = ['Positive Tweets', 'Neutral Tweets', 'Negative Tweets']
-        
-        
-        #Set the size of the plot
-        fig, ax = plt.subplots()
-        
-        ax.axis('equal')
-        mypie,_,pct = ax.pie(group_size, radius=1.3, labels=group_names,colors=[pos_color(.5), neu_color(.5), neg_color(.5)], autopct='%1.1f%%', pctdistance= .8)
-        plt.setp(mypie, width=.7, edgecolor='white')
-        
-        
-        
-        #Show figure
-        plt.title(f"Tweet Sentiment: Category - {account_category}\n\n")
-
-        #Show Plot             
-        plt.show()
+            #Get values for pie group size
+            if account_category == None:
+                tweets = tweets_sent_count.groupby(by=['class_sentiment']).sum()
+                positive_tweets = tweets.loc['positive'].values
+                neutral_tweets = tweets.loc['neutral'].values
+                negative_tweets = tweets.loc['negative'].values
+            else:
+                tweets = tweets_sent_count.loc[account_category]
+                positive_tweets = tweets.loc['positive'].values
+                neutral_tweets = tweets.loc['neutral'].values
+                negative_tweets = tweets.loc['negative'].values
+                
+            #Create Colors, assign group size and names
+            pos_color, neu_color, neg_color = plt.cm.Greens, plt.cm.Greys, plt.cm.Reds
+            group_size = [positive_tweets, neutral_tweets, negative_tweets]
+            group_names = ['Positive Tweets', 'Neutral Tweets', 'Negative Tweets']
+            
+            
+            #Set the size of the plot
+            fig, ax = plt.subplots(figsize=(3,3))
+            
+            ax.axis('equal')
+            mypie,_,pct = ax.pie(group_size, radius=1.3, labels=group_names,colors=[pos_color(.5), neu_color(.5), neg_color(.5)], autopct='%1.1f%%', pctdistance= .8)
+            plt.setp(mypie, width=.7, edgecolor='white')
+            
+            
+            
+            #Show figure
+            plt.title(f"Tweet Sentiment: Category - {account_category}\n\n")
+    
+            #Show Plot             
+            plt.show()
+        except KeyError:
+            print(f'Warning : account category is unavailable in dataset, continuing.')
 
             
 

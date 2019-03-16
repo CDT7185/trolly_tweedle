@@ -3,6 +3,10 @@ import numpy as np
 
 
 class TweetCalculator:
+    """
+    Class for performing calculations on the tweet data. Current uses include the ability to calculate descriptive statistics
+    about troll followers and who they are following.
+    """
     def __init__(self,df):
         """
         Initialize data for calculations performed on tweets, a dataframe is passed to the constructor.
@@ -17,16 +21,16 @@ class TweetCalculator:
         self.tweeters_and_followers = self.author_df.merge(self.author_follow_df,
                                                            on=['author', 'account_category', 'publish_date'],
                                                            how='left')
-
+        
+        self.tweeters_and_followers = self.tweeters_and_followers[['author', 'account_category', 'following', 'followers']]
+        
         # Drop duplicates from data frame
-        self.tweeters_and_followers = self.tweeters_and_followers.drop_duplicates(inplace=False)
+        self.tweeters_and_followers = self.tweeters_and_followers.drop_duplicates()
 
     def calc_followers_and_following(self):
         """
         Calculates and prints followers/following information for troll twitter handles.
-        """
-        
-        
+        """      
 
         # Create arrays of followers/following
         self.followers_array = np.array(self.tweeters_and_followers['followers'].values)
@@ -47,20 +51,20 @@ class TweetCalculator:
         self.followers_sum = np.sum(self.followers_array)
         self.following_sum = np.sum(self.following_array)
         self.follow_ratio = round(np.divide(self.followers_sum, self.following_sum), 2)
-        print("Followers-to-following : " + str(self.follow_ratio))
+        print("Followers-to-following : " + str(self.follow_ratio) + "\n")
         
-    def profile_top(self,n, sort_col, account_category=None):
+    def profile_top(self,num, sort_col, account_category=None):
         """
-        Prints the top n by following/followers with the optional ability to specify by account category
+        Prints the top n profiles by following/followers with the optional ability to specify by account category
         """
         if account_category != None:
-            self.profile_df = self.author_follow_df[self.author_follow_df['account_category']==account_category]
+            self.profile_df = self.tweeters_and_followers[self.tweeters_and_followers['account_category']==account_category]
         else:
-            self.profile_df = self.author_follow_df.copy()
+            self.profile_df = self.tweeters_and_followers.copy()
             
         if sort_col == 'following':
-            self.profile_df = self.profile_df[['author', 'publish_date', 'account_category', 'following', 'followers']].orderby(by=['following'], ascending = False)
+            self.profile_df = self.profile_df[['author','account_category', 'following', 'followers']].sort_values(by=['following'], ascending = False)
         else:
-            self.profile_df = self.profile_df[['author', 'publish_date', 'account_category', 'following', 'followers']].orderby(by=['followers'], ascending = False)
+            self.profile_df = self.profile_df[['author', 'account_category', 'following', 'followers']].sort_values(by=['followers'], ascending = False)
             
-        print(self.profile_df.head(n))
+        print(self.profile_df.head(n=num),"\n")
