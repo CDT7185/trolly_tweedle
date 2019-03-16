@@ -55,7 +55,7 @@ class TweetDataHandler:
         """
         self.data_sources = {
             "troll_tweets" : [
-                    ["\\data\\IRAhandle_tweets_",".csv",2],
+                    ["\\data\\IRAhandle_tweets_",".csv",9],
                     ['external_author_id',
                      'author',
                      'content',

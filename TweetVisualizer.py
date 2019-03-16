@@ -10,13 +10,11 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-#import matplotlib.patches as mpatches
-import seaborn as sns
 
 
 from os import path
 from PIL import Image
-from wordcloud import WordCloud, STOPWORDS, ImageColorGenerator
+from wordcloud import WordCloud
 from collections import Counter
 from matplotlib_venn import venn2, venn2_circles
 
