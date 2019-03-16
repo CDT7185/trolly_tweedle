@@ -39,13 +39,10 @@ class TweetDataHandler:
         The "isPreProc" configuration specifies whether the program will execute the pre-processing steps at run time, or retrieve the
         processed data from a file directory.
 
-        TO DO: 1) Create timer decorator used for performance testing of different program features. The timer decorator funtion will include
-        a condition that checks the configuration at runtime. 2) Convert dictionary to separate json file that is loaded
-        to the program, so multiple json files can be created for easier variability of program configuration.
         """
         self.data_sources = {
             "troll_tweets" : [
-                    ["\\data\\IRAhandle_tweets_",".csv",2],
+                    ["\\data\\IRAhandle_tweets_",".csv",9],
                     ['external_author_id',
                      'author',
                      'content',
@@ -67,7 +64,7 @@ class TweetDataHandler:
         
         self.config = {
             "isMsg": True,
-            "isPreProc":True,
+            "isPreProc":False,
             "isSavePreproc": False,
             "msg_import":'status : reading file into temp data frame',
             "msg_import_preproc":'status : reading preprocessed file into dataframe',
@@ -78,6 +75,8 @@ class TweetDataHandler:
             "msg_preproc_lower":'status : making tweets lower case',
             "msg_trans_follow":'status : creating followers and following dataframe',
             "msg_preproc_hashtagcat":'status : creating sets of hashtags by account category',
+            "msg_preproc_complete":'status : data preprocessing complete',
+            "msg_preproc_class":'status : classifying tweets by sentiment polarity value',
             "msg_preproc_punct":'status : removing tweet punctuation',
             "msg_preproc_tags":'status : removing hashtags from tweets',
             "msg_preproc_stop":'status : removing stopwords from tweets',
@@ -307,19 +306,29 @@ class TweetDataHandler:
             self.msg_handle("msg_preproc_lemma")
             self.processed_tweets = self.processed_tweets.progress_apply(lambda x: " ".join([Word(word).lemmatize() for word in x.split()]))
                        
+            self.processed_tweets = pd.DataFrame(self.processed_tweets, index = self.processed_tweets.index)
+            
+            #Get Tweet Sentiment - polarity, subjectivity and textblob assessments
+            self.msg_handle("msg_preproc_sentiment")
+            self.processed_tweets['sentiment'] = self.processed_tweets['processed_content'].progress_apply(self.get_tweet_sentiment)
+           
+            #Split tweet sentiment containing list  into muliple columns
+            self.msg_handle("msg_preproc_splitcols")
+            self.processed_tweets[['sent_polarity', 'sent_subjectivity', 'sent_assessments']] = pd.DataFrame(self.processed_tweets.sentiment.values.tolist(), index=self.processed_tweets.index)
             
             #Join processed tweets to dataframe
             self.troll_tweet_df = self.troll_tweet_df.join(self.processed_tweets, how='left')
             
-            #Get Tweet Sentiment - polarity, subjectivity and textblob assessments
-            self.msg_handle("msg_preproc_sentiment")
-            self.troll_tweet_df['sentiment'] = self.troll_tweet_df['processed_content'].progress_apply(self.get_tweet_sentiment)
+            #Classify tweets based on polarity
+            self.msg_handle("msg_preproc_class")
             
-            #Split tweet sentiment containing list  into muliple columns
-            self.msg_handle("msg_preproc_splitcols")
-            self.troll_tweet_df[['sent_polarity', 'sent_subjectivity', 'sent_assessments']] = pd.DataFrame(self.troll_tweet_df.sentiment.values.tolist(), index=self.troll_tweet_df.index)
-
-            
+            conditions = [
+                    (self.troll_tweet_df['sent_polarity'] == 0.00),
+                    (self.troll_tweet_df['sent_polarity'] > 0.00),
+                    (self.troll_tweet_df['sent_polarity'] < 0.00)
+                         ]
+            choices = ['neutral', 'positive', 'negative']
+            self.troll_tweet_df['class_sentiment'] = np.select(conditions, choices, default= None)
             #Store processed tweets to CSV for later use
             if self.config["isSavePreproc"] == True:
                 self.msg_handle("msg_preproc_save")
@@ -336,6 +345,8 @@ class TweetDataHandler:
         
         self.followers_and_following_df = self.latest_followers_and_following()
         self.hashtag_set_list = self.get_cat_hash_tags()
+        
+        self.msg_handle("msg_preproc_complete")
         return (self.troll_tweet_df, self.distinct_hashtags, self.followers_and_following_df, self.hashtag_set_list)
                 
     

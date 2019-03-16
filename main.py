@@ -1,11 +1,9 @@
 import TweetVisualizer as viz
 import TweetCalculator as calc
+import numpy as np
 
-
-instance = viz.TweetVisualizer()
 #instance.wordcloud_tweets()
-
-
+#instance = viz.TweetVisualizer()
 
 
 
@@ -17,3 +15,6 @@ instance = viz.TweetVisualizer()
     
    # for category in cat_list:
         #instance.wordcloud_tweets(account_category=category)
+
+#instance = viz.TweetVisualizer()
+instance.donut_sentiment(account_category='RightTroll')

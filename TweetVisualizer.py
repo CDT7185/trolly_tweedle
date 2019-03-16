@@ -9,6 +9,8 @@ import TweetDataHandler as tdh
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
+import matplotlib.patches as mpatches
 
 from os import path
 from PIL import Image
@@ -25,7 +27,7 @@ class TweetVisualizer:
         """
         Initializes the tweet visualizer class, setting the tweedle_collection attribute to data retrieved from the TweetDataHandler class. From the
         tweedle_collection attribute, the data frame from the troll tweets is derived, as well as the distinct hash tags contained within the tweet
-        content. The tweet_pre_processing method is also executed, which performs pre-processing steps on the tweets for later NLP methods. 
+        content. The tweet_pre_processing method is also executed, which performs pre-processing steps on the tweets. 
         """
         self.tweedle = tdh.TweetDataHandler()
         self.tweedle_collection = self.tweedle.tweet_pre_processing()
@@ -121,9 +123,9 @@ class TweetVisualizer:
             "Fearmonger" : self.hashtag_categories[0],
             "Commercial" : self.hashtag_categories[1],
             "Gamer" : self.hashtag_categories[2],
-            "Left Troll" : self.hashtag_categories[3],
-            "News Feed" : self.hashtag_categories[4],
-            "Right Troll" : self.hashtag_categories[5]
+            "LeftTroll" : self.hashtag_categories[3],
+            "NewsFeed" : self.hashtag_categories[4],
+            "RightTroll" : self.hashtag_categories[5]
                     }
             set_list = [sets[i] for i in account_category_list]            
             v = venn2(set_list, (account_category_list[0], account_category_list[1]))
@@ -134,6 +136,48 @@ class TweetVisualizer:
 
             plt.title("Shared Hashtags by Account Category:")
             plt.show()
-       
-             
+    
+    def donut_sentiment(self, account_category=None):
+        """
+        Method to generate a donut chart containing the breakdown of positive, neutral and negative tweets. User
+        may specify an optional account category parameter to compare results across troll types
+        """
+        #Prepare dataframe for viz
+        tweets = self.troll_tweet_df[['processed_content', 'account_category', 'class_sentiment']].drop_duplicates()
+        tweets_sent_count = tweets.groupby(by=['account_category', 'class_sentiment']).count()
+        
+        #Get values for pie group size
+        if account_category == None:
+            tweets = tweets_sent_count.groupby(by=['class_sentiment']).sum()
+            positive_tweets = tweets.loc['positive'].values
+            neutral_tweets = tweets.loc['neutral'].values
+            negative_tweets = tweets.loc['negative'].values
+        else:
+            tweets = tweets_sent_count.loc[account_category]
+            positive_tweets = tweets.loc['positive'].values
+            neutral_tweets = tweets.loc['neutral'].values
+            negative_tweets = tweets.loc['negative'].values
+            
+        #Create Colors, assign group size and names
+        pos_color, neu_color, neg_color = plt.cm.Greens, plt.cm.Greys, plt.cm.Reds
+        group_size = [positive_tweets, neutral_tweets, negative_tweets]
+        group_names = ['Positive Tweets', 'Neutral Tweets', 'Negative Tweets']
+        
+        
+        #Set the size of the plot
+        fig, ax = plt.subplots()
+        
+        ax.axis('equal')
+        mypie,_,pct = ax.pie(group_size, radius=1.3, labels=group_names,colors=[pos_color(.5), neu_color(.5), neg_color(.5)], autopct='%1.1f%%', pctdistance= .8)
+        plt.setp(mypie, width=.7, edgecolor='white')
+        
+        
+        
+        #Show figure
+        plt.title(f"Tweet Sentiment: Category - {account_category}\n\n")
+
+        #Show Plot             
+        plt.show()
+
+            
 

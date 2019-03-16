@@ -3,18 +3,13 @@ import numpy as np
 
 
 class TweetCalculator:
-    def __init__(self):
+    def __init__(self,df):
         """
         Initialize data for calculations performed on tweets, a dataframe is passed to the constructor.
         """
-
-    def calc_followers_and_following(self, df):
-        """
-        Calculates and prints followers/following information for troll twitter handles.
-        """
         self.author_df = df[['author', 'publish_date', 'account_category']]
         self.author_follow_df = df[['author', 'publish_date', 'account_category', 'following', 'followers']]
-
+        
         # Create tweet author df, grouping by the max tweet date
         self.author_df = self.author_df.groupby(by=['author', 'account_category'], as_index=False).max()
 
@@ -25,6 +20,13 @@ class TweetCalculator:
 
         # Drop duplicates from data frame
         self.tweeters_and_followers = self.tweeters_and_followers.drop_duplicates(inplace=False)
+
+    def calc_followers_and_following(self):
+        """
+        Calculates and prints followers/following information for troll twitter handles.
+        """
+        
+        
 
         # Create arrays of followers/following
         self.followers_array = np.array(self.tweeters_and_followers['followers'].values)
@@ -46,3 +48,19 @@ class TweetCalculator:
         self.following_sum = np.sum(self.following_array)
         self.follow_ratio = round(np.divide(self.followers_sum, self.following_sum), 2)
         print("Followers-to-following : " + str(self.follow_ratio))
+        
+    def profile_top(self,n, sort_col, account_category=None):
+        """
+        Prints the top n by following/followers with the optional ability to specify by account category
+        """
+        if account_category != None:
+            self.profile_df = self.author_follow_df[self.author_follow_df['account_category']==account_category]
+        else:
+            self.profile_df = self.author_follow_df.copy()
+            
+        if sort_col == 'following':
+            self.profile_df = self.profile_df[['author', 'publish_date', 'account_category', 'following', 'followers']].orderby(by=['following'], ascending = False)
+        else:
+            self.profile_df = self.profile_df[['author', 'publish_date', 'account_category', 'following', 'followers']].orderby(by=['followers'], ascending = False)
+            
+        print(self.profile_df.head(n))
